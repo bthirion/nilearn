@@ -207,9 +207,6 @@ class Contrast:
     def effect_size(self):
         """Make access to summary statistics more straightforward when
         computing contrasts"""
-        #if self.effect.ndim == 2 and self.effect.shape[0] == 1:
-        #    return self.effect[0, :]
-        #else:
         return self.effect
 
     def effect_variance(self):
@@ -412,7 +409,7 @@ def compute_fixed_effects(contrast_imgs, variance_imgs, mask=None,
             'differs from the number of variance images (%d). '
             % (n_runs, len(variance_imgs))
         )
-    
+
     if isinstance(mask, NiftiMasker):
         masker = mask.fit()
     elif mask is None:
@@ -421,18 +418,19 @@ def compute_fixed_effects(contrast_imgs, variance_imgs, mask=None,
         masker = NiftiMasker(mask_img=mask).fit()
 
     variances = masker.transform(variance_imgs)
-    contrasts = np.array([masker.transform(contrast_img) for contrast_img in contrast_imgs])
+    contrasts = np.array([masker.transform(contrast_img)
+                          for contrast_img in contrast_imgs])
 
     if dofs is not None:
         if len(dofs) != n_runs:
             raise ValueError(
                 'The number of dofs (%d) '
                 'differs from the number of contrast images (%d). '
-            % (len(contrast_imgs), n_runs)
-        )
+                % (len(contrast_imgs), n_runs)
+            )
     else:
         dofs = [100] * n_runs
-        
+
     (fixed_fx_contrast, fixed_fx_variance, fixed_fx_stat, fixed_fx_z_score)\
         = _compute_fixed_effects_params(
             contrasts, variances, precision_weighted, dofs)
@@ -464,7 +462,7 @@ def _compute_fixed_effects_params(contrasts, variances, precision_weighted,
     dim = 1
     contrast_type = 't'
     fixed_fx_contrasts_ = fixed_fx_contrasts
-    if len(fixed_fx_contrasts.shape) == 2: # for F contrasts
+    if len(fixed_fx_contrasts.shape) == 2:
         dim = fixed_fx_contrasts.shape[0]
         if dim > 1:
             contrast_type = 'F'
@@ -474,9 +472,9 @@ def _compute_fixed_effects_params(contrasts, variances, precision_weighted,
                    dim=dim, dof=np.sum(dofs), contrast_type=contrast_type)
     fixed_fx_z_score = con.z_score()
     fixed_fx_stat = con.stat_
-    
+
     if contrast_type == 't':
-        for stuff in [fixed_fx_z_score, fixed_fx_stat]: 
+        for stuff in [fixed_fx_z_score, fixed_fx_stat]:
             if len(stuff.shape) == 2:
                 stuff = stuff[:, 0]
     return (fixed_fx_contrasts, fixed_fx_variance, fixed_fx_stat,
