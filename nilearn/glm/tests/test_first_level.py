@@ -143,6 +143,12 @@ def test_explicit_fixed_effects():
         # raises an error
         with pytest.raises(ValueError):
             compute_fixed_effects(contrasts * 2, variance, mask)
+
+        # ensure that not providing thre right number of dofs 
+        # raises an error
+        with pytest.raises(ValueError):
+            compute_fixed_effects(contrasts, variance, mask, dofs=[100])
+
         del mask, multi_session_model
 
 
