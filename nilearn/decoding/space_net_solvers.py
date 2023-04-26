@@ -9,25 +9,28 @@
 # License: simplified BSD
 
 from math import sqrt
+
 import numpy as np
 from nilearn.masking import _unmask_from_to_3d_array
+
+from .fista import mfista
 from .objective_functions import (
-    spectral_norm_squared,
+    _div,
+    _gradient,
     _gradient_id,
+    _logistic as _logistic_loss,
+    _logistic_loss_grad,
     _logistic_loss_lipschitz_constant,
     _squared_loss,
     _squared_loss_grad,
-    _logistic_loss_grad,
-    _logistic as _logistic_loss,
+    spectral_norm_squared,
 )
-from .objective_functions import _gradient, _div
 from .proximal_operators import (
     _prox_l1,
     _prox_l1_with_intercept,
     _prox_tvl1,
     _prox_tvl1_with_intercept,
 )
-from .fista import mfista
 
 
 def _squared_loss_and_spatial_grad(X, y, w, mask, grad_weight):
@@ -127,7 +130,7 @@ def _graph_net_data_function(X, w, mask, grad_weight):
     out = np.ndarray(X.shape[0] + mask.ndim * X.shape[1])
     out[: X.shape[0]] = X.dot(w)
     out[X.shape[0] :] = np.concatenate(
-        tuple([w_g[i][mask] for i in range(mask.ndim)])
+        tuple(w_g[i][mask] for i in range(mask.ndim))
     )
     return out
 

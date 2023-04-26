@@ -1,32 +1,31 @@
-"""
-Transformer for computing seeds signals
-----------------------------------------
+"""Transformer for computing seeds signals.
 
 Mask nifti images by spherical volumes for seed-region analyses
 """
-import numpy as np
 import warnings
-from sklearn import neighbors
-from joblib import Memory
-from scipy import sparse
 
+import numpy as np
+from joblib import Memory
 from nilearn import image, masking
-from nilearn._utils import CacheMixin, logger, fill_doc
-from nilearn.maskers.base_masker import _filter_and_extract, BaseMasker
+from nilearn._utils import CacheMixin, fill_doc, logger
 from nilearn._utils.class_inspect import get_params
 from nilearn._utils.niimg import img_data_dtype
 from nilearn._utils.niimg_conversions import (
     _safe_get_data,
-    check_niimg_4d,
     check_niimg_3d,
+    check_niimg_4d,
 )
+from nilearn.maskers.base_masker import BaseMasker, _filter_and_extract
+from scipy import sparse
+from sklearn import neighbors
 
 
 def _apply_mask_and_get_affinity(seeds, niimg, radius, allow_overlap,
                                  mask_img=None):
-    """Utility function to get only the rows which are occupied by sphere at
-    given seed locations and the provided radius. Rows are in target_affine and
-    target_shape space.
+    """Get only the rows which are occupied by sphere \
+    at given seed locations and the provided radius.
+
+    Rows are in target_affine and target_shape space.
 
     Parameters
     ----------
@@ -151,7 +150,7 @@ def _apply_mask_and_get_affinity(seeds, niimg, radius, allow_overlap,
 
 def _iter_signals_from_spheres(seeds, niimg, radius, allow_overlap,
                                mask_img=None):
-    """Utility function to iterate over spheres.
+    """Iterate over spheres.
 
     Parameters
     ----------
@@ -236,62 +235,23 @@ class NiftiSpheresMasker(BaseMasker, CacheMixin):
         If False, an error is raised if the maps overlaps (ie at least two
         maps have a non-zero value for the same voxel). Default=False.
     %(smoothing_fwhm)s
-    standardize : {False, True, 'zscore', 'psc'}, optional
-        Strategy to standardize the signal.
-        'zscore': the signal is z-scored. Timeseries are shifted
-        to zero mean and scaled to unit variance.
-        'psc':  Timeseries are shifted to zero mean value and scaled
-        to percent signal change (as compared to original mean signal).
-        True : the signal is z-scored. Timeseries are shifted
-        to zero mean and scaled to unit variance.
-        False : Do not standardize the data.
-        Default=False.
-
-    standardize_confounds : :obj:`bool`, optional
-        If standardize_confounds is True, the confounds are z-scored:
-        their mean is put to 0 and their variance to 1 in the time dimension.
-        Default=True.
-
+    %(standardize_maskers)s
+    %(standardize_confounds)s
     high_variance_confounds : :obj:`bool`, optional
         If True, high variance confounds are computed on provided image with
         :func:`nilearn.image.high_variance_confounds` and default parameters
         and regressed out. Default=False.
-
-    detrend : :obj:`bool`, optional
-        This parameter is passed to signal.clean. Please see the related
-        documentation for details. Default=False.
-
-    low_pass : None or :obj:`float`, optional
-        This parameter is passed to signal.clean. Please see the related
-        documentation for details.
-
-    high_pass : None or :obj:`float`, optional
-        This parameter is passed to signal.clean. Please see the related
-        documentation for details.
-
-    t_r : :obj:`float`, optional
-        This parameter is passed to signal.clean. Please see the related
-        documentation for details.
-
+    %(detrend)s
+    %(low_pass)s
+    %(high_pass)s
+    %(t_r)s
     dtype : {dtype, "auto"}, optional
         Data type toward which the data should be converted. If "auto", the
         data will be converted to int32 if dtype is discrete and float32 if it
         is continuous.
-
-    memory : :obj:`joblib.Memory` or :obj:`str`, optional
-        Used to cache the region extraction process.
-        By default, no caching is done. If a string is given, it is the
-        path to the caching directory.
-
-    memory_level : :obj:`int`, optional
-        Aggressiveness of memory caching. The higher the number, the higher
-        the number of functions that will be cached. Zero means no caching.
-        Default=1.
-
-    verbose : :obj:`int`, optional
-        Indicate the level of verbosity. By default, nothing is printed.
-        Default=0.
-
+    %(memory)s
+    %(memory_level1)s
+    %(verbose0)s
     %(masker_kwargs)s
 
     Attributes
@@ -304,11 +264,12 @@ class NiftiSpheresMasker(BaseMasker, CacheMixin):
     seeds_ : :obj:`list` of :obj:`list`
         The coordinates of the seeds in the masker.
 
-    See also
+    See Also
     --------
     nilearn.maskers.NiftiMasker
 
     """
+
     # memory and memory_level are used by CacheMixin.
 
     def __init__(
@@ -512,7 +473,7 @@ class NiftiSpheresMasker(BaseMasker, CacheMixin):
         return signals
 
     def inverse_transform(self, region_signals):
-        """Compute voxel signals from spheres signals
+        """Compute voxel signals from spheres signals.
 
         Any mask given at initialization is taken into account. Throws an error
         if mask_img==None

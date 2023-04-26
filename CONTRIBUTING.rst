@@ -267,16 +267,20 @@ The main conventions we enforce are :
 You can check that any code you may have edited follows these conventions
 by running `flake8 <https://flake8.pycqa.org/en/latest/user/invocation.html#invoking-flake8>`__.
 
-Additionally, we recommend using `Black <https://black.readthedocs.io/en/stable/getting_started.html#basic-usage>`_
-to format your code.
+Additionally, we recommend using:
+
+- `black <https://black.readthedocs.io/en/stable/getting_started.html#basic-usage>`_
+  to format your code,
+- `isort <https://pycqa.github.io/isort/index.html#using-isort>`_
+  to organize the import statements.
 
 .. warning::
 
-      We are gradually transitioning to use `Black <https://black.readthedocs.io/en/stable/getting_started.html#basic-usage>`_
+      We are gradually transitioning to use `isort` and `black`
       to format the codebase.
       Only certain modules have been formatted so far,
-      and running `black` may not affect the files you are working on,
-      because of how black is currently configured.
+      and running `black` or `isort` may not affect the files you are working on,
+      because of how those formatter are currently configured.
       See `issue #2528 <https://github.com/nilearn/nilearn/issues/2528>`_
       for more details.
 
@@ -397,7 +401,7 @@ Here are the key steps you need to go through to copy the repo before contributi
       pip install -e '.[dev]'
 
 This installs your local version of Nilearn, along with all dependencies necessary for developers (hence the ``[dev]`` tag).
-For more information about the dependency installation options, see ``setup.cfg``.
+For more information about the dependency installation options, see ``pyproject.toml``.
 The installed version will also reflect any changes you make to your code.
 
 4. check that all tests pass with (this can take a while)::

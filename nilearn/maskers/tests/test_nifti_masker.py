@@ -15,13 +15,12 @@ from tempfile import mkdtemp
 import nibabel
 import numpy as np
 import pytest
-from numpy.testing import assert_array_equal
-
 from nilearn._utils import data_gen, exceptions, testing
 from nilearn._utils.class_inspect import get_params
 from nilearn.image import get_data, index_img
 from nilearn.maskers import NiftiMasker
 from nilearn.maskers.nifti_masker import _filter_and_mask
+from numpy.testing import assert_array_equal
 
 
 def test_auto_mask():
@@ -70,6 +69,30 @@ def test_resample():
     assert np.any(X != 0)
 
 
+def test_resample_to_mask_warning():
+    """Check that a warning is raised when data is
+    being resampled to mask's resolution.
+    """
+    data = np.zeros((9, 9, 9))
+    data[3:-3, 3:-3, 3:-3] = 10
+    img = nibabel.Nifti1Image(data, np.eye(4))
+    # defining a mask with different fov than img
+    mask = np.zeros((12, 12, 12))
+    mask[3:-3, 3:-3, 3:-3] = 10
+    mask = mask.astype("uint8")
+    mask_img = nibabel.Nifti1Image(mask, np.eye(4))
+    masker = NiftiMasker(mask_img=mask_img)
+    with pytest.warns(
+        UserWarning,
+        match='imgs are being resampled to the mask_img resolution. '
+            'This process is memory intensive. You might want to provide '
+            'a target_affine that is equal to the affine of the imgs '
+            'or resample the mask beforehand '
+            'to save memory and computation time.'
+    ):
+        masker.fit_transform(img)
+
+
 def test_with_files():
     """Test standard masking with filenames."""
     data = np.zeros((40, 40, 40, 2))
@@ -113,11 +136,11 @@ def test_matrix_orientation():
     fmri, mask = data_gen.generate_fake_fmri(shape=(40, 41, 42), kind="step")
     masker = NiftiMasker(mask_img=mask, standardize=True, detrend=True)
     timeseries = masker.fit_transform(fmri)
-    assert(timeseries.shape[0] == fmri.shape[3])
-    assert(timeseries.shape[1] == get_data(mask).sum())
+    assert (timeseries.shape[0] == fmri.shape[3])
+    assert (timeseries.shape[1] == get_data(mask).sum())
     std = timeseries.std(axis=0)
-    assert(std.shape[0] == timeseries.shape[1])  # paranoid
-    assert(not np.any(std < 0.1))
+    assert (std.shape[0] == timeseries.shape[1])  # paranoid
+    assert (not np.any(std < 0.1))
 
     # Test inverse transform
     masker = NiftiMasker(mask_img=mask, standardize=False, detrend=False)
@@ -425,12 +448,12 @@ def test_dtype():
     img_64 = nibabel.Nifti1Image(data_64, affine_64)
 
     masker_1 = NiftiMasker(dtype='auto')
-    assert(masker_1.fit_transform(img_32).dtype == np.float32)
-    assert(masker_1.fit_transform(img_64).dtype == np.float32)
+    assert (masker_1.fit_transform(img_32).dtype == np.float32)
+    assert (masker_1.fit_transform(img_64).dtype == np.float32)
 
     masker_2 = NiftiMasker(dtype='float64')
-    assert(masker_2.fit_transform(img_32).dtype == np.float64)
-    assert(masker_2.fit_transform(img_64).dtype == np.float64)
+    assert (masker_2.fit_transform(img_32).dtype == np.float64)
+    assert (masker_2.fit_transform(img_64).dtype == np.float64)
 
 
 def test_standardization():

@@ -8,22 +8,21 @@ in the neighborhood of each location of a domain."""
 #
 # License: simplified BSD
 
-import time
 import sys
+import time
 import warnings
 
 import numpy as np
-
-from joblib import Parallel, delayed, cpu_count
+from joblib import Parallel, cpu_count, delayed
+from nilearn.maskers.nifti_spheres_masker import _apply_mask_and_get_affinity
 from sklearn import svm
 from sklearn.base import BaseEstimator
 from sklearn.exceptions import ConvergenceWarning
+from sklearn.model_selection import cross_val_score
 
 from .. import masking
-from ..image.resampling import coord_transform
-from nilearn.maskers.nifti_spheres_masker import _apply_mask_and_get_affinity
 from .._utils import check_niimg_4d, fill_doc
-from sklearn.model_selection import cross_val_score
+from ..image.resampling import coord_transform
 
 ESTIMATOR_CATALOG = dict(svc=svm.LinearSVC, svr=svm.SVR)
 
@@ -125,8 +124,7 @@ class GroupIterator:
         self.n_jobs = n_jobs
 
     def __iter__(self):
-        split = np.array_split(np.arange(self.n_features), self.n_jobs)
-        yield from split
+        yield from np.array_split(np.arange(self.n_features), self.n_jobs)
 
 
 def _group_iter_search_light(
@@ -188,9 +186,7 @@ def _group_iter_search_light(
     par_scores = np.zeros(len(list_rows))
     t0 = time.time()
     for i, row in enumerate(list_rows):
-        kwargs = dict()
-        kwargs["scoring"] = scoring
-        kwargs["groups"] = groups
+        kwargs = {"scoring": scoring, "groups": groups}
         par_scores[i] = np.mean(
             cross_val_score(estimator, X[:, row], y, cv=cv, n_jobs=1, **kwargs)
         )
@@ -199,19 +195,15 @@ def _group_iter_search_light(
             step = 11 - min(verbose, 10)
             if i % step == 0:
                 # If there is only one job, progress information is fixed
-                if total == len(list_rows):
-                    crlf = "\r"
-                else:
-                    crlf = "\n"
+                crlf = "\r" if total == len(list_rows) else "\n"
                 percent = float(i) / len(list_rows)
                 percent = round(percent * 100, 2)
                 dt = time.time() - t0
                 # We use a max to avoid a division by zero
                 remaining = (100.0 - percent) / max(0.01, percent) * dt
                 sys.stderr.write(
-                    "Job #%d, processed %d/%d voxels "
-                    "(%0.2f%%, %i seconds remaining)%s"
-                    % (thread_id, i, len(list_rows), percent, remaining, crlf)
+                    f"Job #{thread_id}, processed {i}/{len(list_rows)} voxels "
+                    f"({percent:0.2f}%, {remaining} seconds remaining){crlf}"
                 )
     return par_scores
 
