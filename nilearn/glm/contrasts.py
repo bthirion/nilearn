@@ -474,11 +474,6 @@ def _compute_fixed_effects_params(contrasts, variances, precision_weighted,
     fixed_fx_stat = con.stat_
 
     """
-    if contrast_type == 't':
-        if len(fixed_fx_z_score.shape) == 2:
-            fixed_fx_z_score = fixed_fx_z_score[:, 0]
-        if len(fixed_fx_stat.shape) == 2:
-            fixed_fx_stat = fixed_fx_stat[:, 0]
     """
     return (fixed_fx_contrasts, fixed_fx_variance, fixed_fx_stat,
             fixed_fx_z_score)
