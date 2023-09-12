@@ -6,15 +6,15 @@ constitutes output maps
 """
 
 # Author: Arthur Mensch
-# License: BSD 3 clause
 
 import warnings
 
 import numpy as np
 from joblib import Memory
-from nilearn._utils import fill_doc
 from sklearn.decomposition import dict_learning_online
 from sklearn.linear_model import Ridge
+
+from nilearn._utils import fill_doc
 
 from ._base import _BaseDecomposition
 from .canica import CanICA
@@ -290,15 +290,16 @@ class DictLearning(_BaseDecomposition):
 
         dict_init = self.loadings_init_
 
-        n_iter = ((n_features - 1) // self.batch_size + 1) * self.n_epochs
+        max_iter = ((n_features - 1) // self.batch_size + 1) * self.n_epochs
 
         if self.verbose:
             print("[DictLearning] Learning dictionary")
+        # TODO: turn n_iter to max_iter when dropping python 3.7
         self.components_, _ = self._cache(dict_learning_online)(
             data.T,
             self.n_components,
             alpha=self.alpha,
-            n_iter=n_iter,
+            n_iter=max_iter,
             batch_size=self.batch_size,
             method=self.method,
             dict_init=dict_init,

@@ -4,6 +4,7 @@ import warnings
 
 import numpy as np
 from joblib import Memory
+
 from nilearn import _utils, image, masking
 from nilearn.maskers.base_masker import BaseMasker, _filter_and_extract
 
@@ -13,10 +14,11 @@ class _ExtractionFunctor:
     func_name = 'nifti_labels_masker_extractor'
 
     def __init__(self, _resampled_labels_img_, background_label, strategy,
-                 mask_img):
+                 keep_masked_labels, mask_img):
         self._resampled_labels_img_ = _resampled_labels_img_
         self.background_label = background_label
         self.strategy = strategy
+        self.keep_masked_labels = keep_masked_labels
         self.mask_img = mask_img
 
     def __call__(self, imgs):
@@ -25,7 +27,7 @@ class _ExtractionFunctor:
         return signal_extraction.img_to_signals_labels(
             imgs, self._resampled_labels_img_,
             background_label=self.background_label, strategy=self.strategy,
-            mask_img=self.mask_img)
+            keep_masked_labels=self.keep_masked_labels, mask_img=self.mask_img)
 
 
 @_utils.fill_doc
@@ -88,7 +90,7 @@ class NiftiLabelsMasker(BaseMasker, _utils.CacheMixin):
         The name of a valid function to reduce the region with.
         Must be one of: sum, mean, median, minimum, maximum, variance,
         standard_deviation. Default='mean'.
-
+    %(keep_masked_labels)s
     reports : :obj:`bool`, optional
         If set to True, data is saved in order to produce a report.
         Default=True.
@@ -137,6 +139,7 @@ class NiftiLabelsMasker(BaseMasker, _utils.CacheMixin):
         memory_level=1,
         verbose=0,
         strategy='mean',
+        keep_masked_labels=True,
         reports=True,
         **kwargs,
     ):
@@ -169,11 +172,10 @@ class NiftiLabelsMasker(BaseMasker, _utils.CacheMixin):
         self.memory_level = memory_level
         self.verbose = verbose
         self.reports = reports
-        self._report_content = dict()
-        self._report_content['description'] = (
-            'This reports shows the regions defined by the labels of the mask.'
-        )
-        self._report_content['warning_message'] = None
+        self._report_content = {
+            'description': ('This reports shows the regions '
+                            'defined by the labels of the mask.'),
+            'warning_message': None}
 
         available_reduction_strategies = {
             'mean',
@@ -199,6 +201,10 @@ class NiftiLabelsMasker(BaseMasker, _utils.CacheMixin):
                 f"parameter: {resampling_target}"
             )
 
+        self.keep_masked_labels = keep_masked_labels
+
+        self.cmap = kwargs.get("cmap", "CMRmap_r")
+
     def generate_report(self):
         """Generate a report."""
         from nilearn.reporting.html_report import generate_report
@@ -215,6 +221,7 @@ class NiftiLabelsMasker(BaseMasker, _utils.CacheMixin):
         """
         try:
             import matplotlib.pyplot as plt
+
             from nilearn import plotting
         except ImportError:
             with warnings.catch_warnings():
@@ -294,7 +301,7 @@ class NiftiLabelsMasker(BaseMasker, _utils.CacheMixin):
                 display = plotting.plot_img(
                     img,
                     black_bg=False,
-                    cmap='CMRmap_r',
+                    cmap=self.cmap,
                 )
                 plt.close()
                 display.add_contours(labels_image, filled=False, linewidths=3)
@@ -329,25 +336,26 @@ class NiftiLabelsMasker(BaseMasker, _utils.CacheMixin):
     def fit(self, imgs=None, y=None):
         """Prepare signal extraction from regions.
 
-        All parameters are unused, they are for scikit-learn compatibility.
+        Parameters
+        ----------
+        imgs : :obj:`list` of Niimg-like objects
+            See :ref:`extracting_data`.
+            Image data passed to the reporter.
 
+        y : None
+            This parameter is unused. It is solely included for scikit-learn
+            compatibility.
         """
-        _utils.logger.log(
-            'loading data from %s' % _utils._repr_niimgs(
-                self.labels_img,
-                shorten=(not self.verbose),
-            ),
-            verbose=self.verbose,
-        )
+        repr = _utils._repr_niimgs(self.labels_img,
+                                   shorten=(not self.verbose))
+        msg = f"loading data from {repr}"
+        _utils.logger.log(msg=msg, verbose=self.verbose)
         self.labels_img_ = _utils.check_niimg_3d(self.labels_img)
         if self.mask_img is not None:
-            _utils.logger.log(
-                'loading data from %s' % _utils._repr_niimgs(
-                    self.mask_img,
-                    shorten=(not self.verbose),
-                ),
-                verbose=self.verbose,
-            )
+            repr = _utils._repr_niimgs(self.mask_img,
+                                       shorten=(not self.verbose))
+            msg = f"loading data from {repr}"
+            _utils.logger.log(msg=msg, verbose=self.verbose)
             self.mask_img_ = _utils.check_niimg_3d(self.mask_img)
 
         else:
@@ -452,8 +460,9 @@ class NiftiLabelsMasker(BaseMasker, _utils.CacheMixin):
             shape: (number of scans, number of labels)
 
         """
-        return self.fit().transform(imgs, confounds=confounds,
-                                    sample_mask=sample_mask)
+        return self.fit(imgs).transform(
+            imgs, confounds=confounds, sample_mask=sample_mask
+        )
 
     def _check_fitted(self):
         if not hasattr(self, 'labels_img_'):
@@ -591,6 +600,7 @@ class NiftiLabelsMasker(BaseMasker, _utils.CacheMixin):
                 self._resampled_labels_img_,
                 self.background_label,
                 self.strategy,
+                self.keep_masked_labels,
                 self._resampled_mask_img,
             ),
             # Pre-processing

@@ -68,6 +68,7 @@ masker = NiftiSpheresMasker(
     radius=8,
     detrend=True,
     standardize="zscore_sample",
+    standardize_confounds="zscore_sample",
     low_pass=0.1,
     high_pass=0.01,
     t_r=2,
@@ -110,7 +111,10 @@ plt.tight_layout()
 
 from nilearn.connectome import ConnectivityMeasure
 
-connectivity_measure = ConnectivityMeasure(kind="partial correlation")
+connectivity_measure = ConnectivityMeasure(
+    kind="partial correlation",
+    standardize="zscore_sample",
+)
 partial_correlation_matrix = connectivity_measure.fit_transform([time_series])[
     0
 ]
@@ -203,6 +207,7 @@ spheres_masker = NiftiSpheresMasker(
     radius=5.0,
     detrend=True,
     standardize="zscore_sample",
+    standardize_confounds="zscore_sample",
     low_pass=0.1,
     high_pass=0.01,
     t_r=2,
@@ -345,6 +350,7 @@ spheres_masker = NiftiSpheresMasker(
     radius=4.5,
     detrend=True,
     standardize="zscore_sample",
+    standardize_confounds="zscore_sample",
     low_pass=0.1,
     high_pass=0.01,
     t_r=2,
@@ -430,3 +436,5 @@ plotting.show()
 #   * :ref:`sphx_glr_auto_examples_03_connectivity_plot_atlas_comparison.py`
 #
 #   * :ref:`sphx_glr_auto_examples_03_connectivity_plot_multi_subject_connectome.py` # noqa
+
+# sphinx_gallery_dummy_images=7

@@ -8,10 +8,11 @@ Author: Bertrand Thirion, 2015 -- 2019
 import warnings
 
 import numpy as np
-from nilearn.image import get_data, math_img, threshold_img
-from nilearn.maskers import NiftiMasker
 from scipy.ndimage import label
 from scipy.stats import norm
+
+from nilearn.image import get_data, math_img, threshold_img
+from nilearn.maskers import NiftiMasker
 
 
 def _compute_hommel_value(z_vals, alpha, verbose=False):
@@ -272,7 +273,7 @@ def threshold_stats_img(
             return None, threshold
         else:
             raise ValueError(
-                "Map_threshold requires stat_img not to be None"
+                "Map_threshold requires stat_img not to be None "
                 "when the height_control procedure "
                 'is "bonferroni" or "fdr"'
             )

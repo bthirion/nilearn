@@ -1,7 +1,6 @@
 """Test the datasets module."""
 
 # Author: Alexandre Abraham
-# License: simplified BSD
 
 import json
 import os
@@ -17,10 +16,10 @@ import nibabel as nib
 import numpy as np
 import pandas as pd
 import pytest
+
 from nilearn.datasets import func
 from nilearn.datasets._testing import dict_to_archive, list_to_archive
 from nilearn.datasets.utils import _get_dataset_dir
-from sklearn.utils import check_random_state
 
 
 def _load_localizer_index():
@@ -35,12 +34,13 @@ def _load_localizer_index():
         )
     localizer_index["/localizer/phenotype/behavioural.tsv"] = uuid.uuid4().hex
     localizer_index["/localizer/participants.tsv"] = uuid.uuid4().hex
-    tsv_files = {}
-    tsv_files["/localizer/phenotype/behavioural.tsv"] = pd.read_csv(
-        str(data_dir / "localizer_behavioural.tsv"), sep="\t"
-    )
+    tsv_files = {
+        "/localizer/phenotype/behavioural.tsv": pd.read_csv(
+            data_dir / "localizer_behavioural.tsv", sep="\t"
+        )
+    }
     tsv_files["/localizer/participants.tsv"] = pd.read_csv(
-        str(data_dir / "localizer_participants.tsv"), sep="\t"
+        data_dir / "localizer_participants.tsv", sep="\t"
     )
     return localizer_index, tsv_files
 
@@ -79,6 +79,7 @@ def test_fetch_haxby(tmp_path, request_mocker):
     for i in range(1, 6):
         haxby = func.fetch_haxby(data_dir=tmp_path, subjects=[i], verbose=0)
         # subject_data + (md5 + mask if first subj)
+
         assert request_mocker.url_count == i + 2
         assert len(haxby.func) == 1
         assert len(haxby.anat) == 1
@@ -94,6 +95,7 @@ def test_fetch_haxby(tmp_path, request_mocker):
     # subjects with list
     subjects = [1, 2, 6]
     haxby = func.fetch_haxby(data_dir=tmp_path, subjects=subjects, verbose=0)
+
     assert len(haxby.func) == len(subjects)
     assert len(haxby.mask_house_little) == len(subjects)
     assert len(haxby.anat) == len(subjects)
@@ -180,6 +182,7 @@ def test_fetch_adhd(tmp_path, request_mocker):
         re.compile(r".*adhd40_([0-9]+)\.tgz")
     ] = _adhd_example_subject
     adhd = func.fetch_adhd(data_dir=tmp_path, n_subjects=12, verbose=0)
+
     assert len(adhd.func) == 12
     assert len(adhd.confounds) == 12
     assert request_mocker.url_count == 13  # Subjects + phenotypic
@@ -188,6 +191,7 @@ def test_fetch_adhd(tmp_path, request_mocker):
 
 def test_miyawaki2008(tmp_path, request_mocker):
     dataset = func.fetch_miyawaki2008(data_dir=tmp_path, verbose=0)
+
     assert len(dataset.func) == 32
     assert len(dataset.label) == 32
     assert isinstance(dataset.mask, str)
@@ -197,7 +201,7 @@ def test_miyawaki2008(tmp_path, request_mocker):
     assert dataset.description != ""
 
 
-def test_fetch_localizer_contrasts(tmp_path, request_mocker, localizer_mocker):
+def test_fetch_localizer_contrasts(tmp_path, localizer_mocker):
     # 2 subjects
     dataset = func.fetch_localizer_contrasts(
         ["checkerboard"],
@@ -206,6 +210,7 @@ def test_fetch_localizer_contrasts(tmp_path, request_mocker, localizer_mocker):
         verbose=1,
         legacy_format=True,
     )
+
     assert not hasattr(dataset, "anats")
     assert not hasattr(dataset, "tmaps")
     assert not hasattr(dataset, "masks")
@@ -221,6 +226,7 @@ def test_fetch_localizer_contrasts(tmp_path, request_mocker, localizer_mocker):
         verbose=1,
         legacy_format=False,
     )
+
     assert not hasattr(dataset, "anats")
     assert not hasattr(dataset, "tmaps")
     assert not hasattr(dataset, "masks")
@@ -229,7 +235,10 @@ def test_fetch_localizer_contrasts(tmp_path, request_mocker, localizer_mocker):
     assert len(dataset.cmaps) == 2
     assert len(dataset["ext_vars"]) == 2
 
-    # Multiple contrasts
+
+def test_fetch_localizer_contrasts_multiple_contrasts(
+    tmp_path, localizer_mocker
+):
     dataset = func.fetch_localizer_contrasts(
         ["checkerboard", "horizontal checkerboard"],
         n_subjects=2,
@@ -237,11 +246,14 @@ def test_fetch_localizer_contrasts(tmp_path, request_mocker, localizer_mocker):
         verbose=1,
         legacy_format=False,
     )
+
     assert isinstance(dataset.ext_vars, pd.DataFrame)
     assert isinstance(dataset.cmaps[0], str)
     assert len(dataset.cmaps) == 2 * 2  # two contrasts are fetched
     assert len(dataset["ext_vars"]) == 2
 
+
+def test_fetch_localizer_contrasts_get_all(tmp_path, localizer_mocker):
     # all get_*=True
     dataset = func.fetch_localizer_contrasts(
         ["checkerboard"],
@@ -253,6 +265,7 @@ def test_fetch_localizer_contrasts(tmp_path, request_mocker, localizer_mocker):
         verbose=1,
         legacy_format=False,
     )
+
     assert isinstance(dataset.ext_vars, pd.DataFrame)
     assert isinstance(dataset.anats[0], str)
     assert isinstance(dataset.cmaps[0], str)
@@ -265,6 +278,8 @@ def test_fetch_localizer_contrasts(tmp_path, request_mocker, localizer_mocker):
     assert len(dataset.tmaps) == 1
     assert dataset.description != ""
 
+
+def test_fetch_localizer_contrasts_list_subjects(tmp_path, localizer_mocker):
     # grab a given list of subjects
     dataset2 = func.fetch_localizer_contrasts(
         ["checkerboard"],
@@ -273,6 +288,7 @@ def test_fetch_localizer_contrasts(tmp_path, request_mocker, localizer_mocker):
         verbose=1,
         legacy_format=False,
     )
+
     assert len(dataset2["ext_vars"]) == 3
     assert len(dataset2.cmaps) == 3
     assert list(dataset2["ext_vars"]["participant_id"].values) == [
@@ -282,13 +298,12 @@ def test_fetch_localizer_contrasts(tmp_path, request_mocker, localizer_mocker):
     ]
 
 
-def test_fetch_localizer_calculation_task(
-    tmp_path, request_mocker, localizer_mocker
-):
+def test_fetch_localizer_calculation_task(tmp_path, localizer_mocker):
     # 2 subjects
     dataset = func.fetch_localizer_calculation_task(
         n_subjects=2, data_dir=tmp_path, verbose=1, legacy_format=False
     )
+
     assert isinstance(dataset.ext_vars, pd.DataFrame)
     assert isinstance(dataset.cmaps[0], str)
     assert len(dataset["ext_vars"]) == 2
@@ -298,6 +313,7 @@ def test_fetch_localizer_calculation_task(
     dataset = func.fetch_localizer_calculation_task(
         n_subjects=2, data_dir=tmp_path, verbose=1, legacy_format=True
     )
+
     assert isinstance(dataset.ext_vars, np.recarray)
     assert isinstance(dataset.cmaps[0], str)
     assert dataset.ext_vars.size == 2
@@ -305,9 +321,7 @@ def test_fetch_localizer_calculation_task(
     assert dataset.description != ""
 
 
-def test_fetch_localizer_button_task(
-    tmp_path, request_mocker, localizer_mocker
-):
+def test_fetch_localizer_button_task(tmp_path, localizer_mocker):
     # Disabled: cannot be tested without actually fetching covariates CSV file
     # Only one subject
     dataset = func.fetch_localizer_button_task(data_dir=tmp_path, verbose=1)
@@ -329,9 +343,9 @@ def test_fetch_abide_pcp(tmp_path, request_mocker, quality_checked):
     n_subjects = 800
     ids = list(range(n_subjects))
     filenames = ["no_filename"] * n_subjects
-    filenames[::2] = ["filename"] * int(n_subjects / 2)
+    filenames[::2] = ["filename"] * (n_subjects // 2)
     qc_rater_1 = ["OK"] * n_subjects
-    qc_rater_1[::4] = ["fail"] * int(n_subjects / 4)
+    qc_rater_1[::4] = ["fail"] * (n_subjects // 4)
     pheno = pd.DataFrame(
         {
             "subject_id": ids,
@@ -359,6 +373,7 @@ def test_fetch_abide_pcp(tmp_path, request_mocker, quality_checked):
         data_dir=tmp_path, quality_checked=quality_checked, verbose=0
     )
     div = 4 if quality_checked else 2
+
     assert len(dataset.func_preproc) == n_subjects / div
     assert dataset.description != ""
 
@@ -371,22 +386,21 @@ def test_fetch_abide_pcp(tmp_path, request_mocker, quality_checked):
     )
 
 
-def test__load_mixed_gambles(request_mocker):
-    rng = check_random_state(42)
+def test__load_mixed_gambles(rng):
     n_trials = 48
     affine = np.eye(4)
     for n_subjects in [1, 5, 16]:
-        zmaps = []
-        for _ in range(n_subjects):
-            zmaps.append(
-                nibabel.Nifti1Image(rng.randn(3, 4, 5, n_trials), affine)
-            )
+        zmaps = [
+            nibabel.Nifti1Image(rng.randn(3, 4, 5, n_trials), affine)
+            for _ in range(n_subjects)
+        ]
         zmaps, gain, _ = func._load_mixed_gambles(zmaps)
+
         assert len(zmaps) == n_subjects * n_trials
         assert len(zmaps) == len(gain)
 
 
-def test_fetch_mixed_gambles(tmp_path, request_mocker):
+def test_fetch_mixed_gambles(tmp_path):
     for n_subjects in [1, 5, 16]:
         mgambles = func.fetch_mixed_gambles(
             n_subjects=n_subjects,
@@ -395,13 +409,14 @@ def test_fetch_mixed_gambles(tmp_path, request_mocker):
             return_raw_data=True,
         )
         datasetdir = tmp_path / "jimura_poldrack_2012_zmaps"
+
         assert mgambles["zmaps"][0] == str(
             datasetdir / "zmaps" / "sub001_zmaps.nii.gz"
         )
         assert len(mgambles["zmaps"]) == n_subjects
 
 
-def test_check_parameters_megatrawls_datasets(request_mocker):
+def test_check_parameters_megatrawls_datasets():
     # testing whether the function raises the same error message
     # if invalid input parameters are provided
     message = "Invalid {0} input is provided: {1}."
@@ -427,22 +442,20 @@ def test_check_parameters_megatrawls_datasets(request_mocker):
             func.fetch_megatrawls_netmats(matrices=invalid_output_name)
 
 
-def test_fetch_megatrawls_netmats(tmp_path, request_mocker):
+def test_fetch_megatrawls_netmats(tmp_path):
     # smoke test to see that files are fetched and read properly
     # since we are loading data present in it
-    files_dir = str(
-        tmp_path / "Megatrawls" / "3T_Q1-Q6related468_MSMsulc_d100_ts3"
-    )
-    os.makedirs(files_dir)
-    with open(os.path.join(files_dir, "Znet2.txt"), "w") as net_file:
-        net_file.write("1")
-
-    files_dir2 = str(
-        tmp_path / "Megatrawls" / "3T_Q1-Q6related468_MSMsulc_d300_ts2"
-    )
-    os.makedirs(files_dir2)
-    with open(os.path.join(files_dir2, "Znet1.txt"), "w") as net_file2:
-        net_file2.write("1")
+    for file, folder in zip(
+        ["Znet2.txt", "Znet1.txt"],
+        [
+            "3T_Q1-Q6related468_MSMsulc_d100_ts3",
+            "3T_Q1-Q6related468_MSMsulc_d300_ts2",
+        ],
+    ):
+        files_dir = tmp_path / "Megatrawls" / folder
+        files_dir.mkdir(parents=True, exist_ok=True)
+        with open(files_dir / file, "w") as net_file:
+            net_file.write("1")
 
     megatrawl_netmats_data = func.fetch_megatrawls_netmats(data_dir=tmp_path)
 
@@ -468,12 +481,13 @@ def test_fetch_megatrawls_netmats(tmp_path, request_mocker):
         timeseries="multiple_spatial_regression",
         matrices="full_correlation",
     )
+
     assert netmats_data.dimensions == 300
     assert netmats_data.timeseries == "multiple_spatial_regression"
     assert netmats_data.matrices == "full_correlation"
 
 
-def test_fetch_surf_nki_enhanced(tmp_path, request_mocker, verbose=0):
+def test_fetch_surf_nki_enhanced(tmp_path, request_mocker):
     ids = np.asarray(
         [
             "A00028185",
@@ -571,15 +585,17 @@ def test_fetch_development_fmri_participants(tmp_path, request_mocker):
     participants = func._fetch_development_fmri_participants(
         data_dir=tmp_path, url=None, verbose=1
     )
+
     assert isinstance(participants, np.ndarray)
     assert participants.shape == (5,)
 
 
-def test_fetch_development_fmri_functional(tmp_path, request_mocker):
+def test_fetch_development_fmri_functional(tmp_path):
     mock_participants = _mock_participants_data(n_ids=8)
     funcs, confounds = func._fetch_development_fmri_functional(
         mock_participants, data_dir=tmp_path, url=None, resume=True, verbose=1
     )
+
     assert len(funcs) == 8
     assert len(confounds) == 8
 
@@ -596,6 +612,7 @@ def test_fetch_development_fmri(tmp_path, request_mocker):
     data = func.fetch_development_fmri(
         n_subjects=2, data_dir=tmp_path, verbose=1
     )
+
     assert len(data.func) == 2
     assert len(data.confounds) == 2
     assert isinstance(data.phenotypic, np.ndarray)
@@ -604,6 +621,7 @@ def test_fetch_development_fmri(tmp_path, request_mocker):
 
     # check reduced confounds
     confounds = np.recfromcsv(data.confounds[0], delimiter="\t")
+
     assert len(confounds[0]) == 15
 
     # check full confounds
@@ -611,6 +629,7 @@ def test_fetch_development_fmri(tmp_path, request_mocker):
         n_subjects=2, reduce_confounds=False, verbose=1
     )
     confounds = np.recfromcsv(data.confounds[0], delimiter="\t")
+
     assert len(confounds[0]) == 28
 
     # check first subject is an adult
@@ -618,6 +637,7 @@ def test_fetch_development_fmri(tmp_path, request_mocker):
         n_subjects=1, reduce_confounds=False, verbose=1
     )
     age_group = data.phenotypic["Child_Adult"][0]
+
     assert age_group == "adult"
 
     # check first subject is an child if requested with age_group
@@ -625,6 +645,7 @@ def test_fetch_development_fmri(tmp_path, request_mocker):
         n_subjects=1, reduce_confounds=False, verbose=1, age_group="child"
     )
     age_group = data.phenotypic["Child_Adult"][0]
+
     assert age_group == "child"
 
     # check one of each age group returned if n_subject == 2
@@ -633,20 +654,23 @@ def test_fetch_development_fmri(tmp_path, request_mocker):
         n_subjects=2, reduce_confounds=False, verbose=1, age_group="both"
     )
     age_group = data.phenotypic["Child_Adult"]
+
     assert all(age_group == ["adult", "child"])
 
     # check age_group
     data = func.fetch_development_fmri(
         n_subjects=2, reduce_confounds=False, verbose=1, age_group="child"
     )
-    assert all([x == "child" for x in data.phenotypic["Child_Adult"]])
+
+    assert all(x == "child" for x in data.phenotypic["Child_Adult"])
 
 
-def test_fetch_development_fmri_invalid_n_subjects(request_mocker):
+def test_fetch_development_fmri_invalid_n_subjects():
     max_subjects = 155
     n_subjects = func._set_invalid_n_subjects_to_max(
         n_subjects=None, max_subjects=max_subjects, age_group="adult"
     )
+
     assert n_subjects == max_subjects
     with pytest.warns(UserWarning, match="Wrong value for n_subjects="):
         func._set_invalid_n_subjects_to_max(
@@ -654,7 +678,7 @@ def test_fetch_development_fmri_invalid_n_subjects(request_mocker):
         )
 
 
-def test_fetch_development_fmri_exception(request_mocker):
+def test_fetch_development_fmri_exception():
     with pytest.raises(ValueError, match="Wrong value for age_group"):
         func._filter_func_regressors_by_participants(
             participants="junk", age_group="junk for test"
@@ -667,7 +691,7 @@ currdir = os.path.dirname(os.path.abspath(__file__))
 datadir = os.path.join(currdir, "data")
 
 
-def test_fetch_bids_langloc_dataset(request_mocker, tmp_path):
+def test_fetch_bids_langloc_dataset(tmp_path):
     data_dir = str(tmp_path / "bids_langloc_example")
     os.mkdir(data_dir)
     main_folder = os.path.join(data_dir, "bids_langloc_dataset")
@@ -679,44 +703,53 @@ def test_fetch_bids_langloc_dataset(request_mocker, tmp_path):
     assert isinstance(dl_files, list)
 
 
-def test_select_from_index(request_mocker):
+def test_select_from_index():
     dataset_version = "ds000030_R1.0.4"
     data_prefix = (
         f"{dataset_version.split('_')[0]}/{dataset_version}/uncompressed"
     )
     # Prepare url files for subject and filter tests
     urls = [
-        data_prefix + "/stuff.html",
-        data_prefix + "/sub-xxx.html",
-        data_prefix + "/sub-yyy.html",
-        data_prefix + "/sub-xxx/ses-01_task-rest.txt",
-        data_prefix + "/sub-xxx/ses-01_task-other.txt",
-        data_prefix + "/sub-xxx/ses-02_task-rest.txt",
-        data_prefix + "/sub-xxx/ses-02_task-other.txt",
-        data_prefix + "/sub-yyy/ses-01.txt",
-        data_prefix + "/sub-yyy/ses-02.txt",
+        f"{data_prefix}/{f}"
+        for f in [
+            "stuff.html",
+            "sub-xxx.html",
+            "sub-yyy.html",
+            "sub-xxx/ses-01_task-rest.txt",
+            "sub-xxx/ses-01_task-other.txt",
+            "sub-xxx/ses-02_task-rest.txt",
+            "sub-xxx/ses-02_task-other.txt",
+            "sub-yyy/ses-01.txt",
+            "sub-yyy/ses-02.txt",
+        ]
     ]
 
     # Only 1 subject and not subject specific files get downloaded
     new_urls = func.select_from_index(urls, n_subjects=1)
+
     assert len(new_urls) == 6
     assert data_prefix + "/sub-yyy.html" not in new_urls
 
     # 2 subjects and not subject specific files get downloaded
     new_urls = func.select_from_index(urls, n_subjects=2)
+
     assert len(new_urls) == 9
     assert data_prefix + "/sub-yyy.html" in new_urls
+
     # ALL subjects and not subject specific files get downloaded
     new_urls = func.select_from_index(urls, n_subjects=None)
+
     assert len(new_urls) == 9
 
     # test inclusive filters. Only files with task-rest
     new_urls = func.select_from_index(urls, inclusion_filters=["*task-rest*"])
+
     assert len(new_urls) == 2
     assert data_prefix + "/stuff.html" not in new_urls
 
     # test exclusive filters. only files without ses-01
     new_urls = func.select_from_index(urls, exclusion_filters=["*ses-01*"])
+
     assert len(new_urls) == 6
     assert data_prefix + "/stuff.html" in new_urls
 
@@ -724,11 +757,12 @@ def test_select_from_index(request_mocker):
     new_urls = func.select_from_index(
         urls, inclusion_filters=["*task-rest*"], exclusion_filters=["*ses-01*"]
     )
+
     assert len(new_urls) == 1
     assert data_prefix + "/sub-xxx/ses-02_task-rest.txt" in new_urls
 
 
-def test_fetch_ds000030_urls(request_mocker):
+def test_fetch_ds000030_urls():
     with tempfile.TemporaryDirectory() as tmpdir:
         dataset_version = "ds000030_R1.0.4"
         subdir_names = ["ds000030", "ds000030_R1.0.4", "uncompressed"]
@@ -749,6 +783,7 @@ def test_fetch_ds000030_urls(request_mocker):
             verbose=1,
         )
         urls_path = urls_path.replace("/", os.sep)
+
         assert urls_path == filepath
         assert urls == mock_json_content
 
@@ -761,6 +796,7 @@ def test_fetch_ds000030_urls(request_mocker):
             )
 
         urls_path = urls_path.replace("/", os.sep)
+
         assert urls_path == filepath
         assert urls == mock_json_content
 
@@ -777,11 +813,12 @@ def test_fetch_ds000030_urls(request_mocker):
             )
 
         urls_path = urls_path.replace("/", os.sep)
+
         assert urls_path == filepath
         assert urls == mock_json_content
 
 
-def test_fetch_openneuro_dataset(request_mocker, tmp_path):
+def test_fetch_openneuro_dataset(tmp_path):
     dataset_version = "ds000030_R1.0.4"
     data_prefix = (
         f"{dataset_version.split('_')[0]}/{dataset_version}/uncompressed"
@@ -811,10 +848,27 @@ def test_fetch_openneuro_dataset(request_mocker, tmp_path):
     datadir, dl_files = func.fetch_openneuro_dataset(
         urls, tmp_path, dataset_version
     )
+
     assert isinstance(datadir, str)
     assert isinstance(dl_files, list)
     assert len(dl_files) == 9
 
+    # Try downloading a different dataset without providing URLs
+    # This should raise a warning and download ds000030.
+    with pytest.warns(
+        UserWarning,
+        match='Downloading "ds000030_R1.0.4".',
+    ):
+        _, urls = func.fetch_openneuro_dataset(
+            urls=None,
+            data_dir=tmp_path,
+            dataset_version="ds500_v2",
+            verbose=1,
+        )
+
+
+def test_fetch_openneuro_dataset_errors(tmp_path):
+    dataset_version = "ds000030_R1.0.4"
     # URLs do not contain the data_prefix, which should raise a ValueError
     urls = [
         "https://example.com/stuff.html",
@@ -823,29 +877,17 @@ def test_fetch_openneuro_dataset(request_mocker, tmp_path):
     with pytest.raises(ValueError, match="This indicates that the URLs"):
         func.fetch_openneuro_dataset(urls, tmp_path, dataset_version)
 
-    # Try downloading a different dataset without providing URLs
-    # This should raise a warning and download ds000030.
-    with pytest.warns(
-        UserWarning,
-        match='Downloading "ds000030_R1.0.4".',
-    ):
-        urls_path, urls = func.fetch_openneuro_dataset(
-            urls=None,
-            data_dir=tmp_path,
-            dataset_version="ds500_v2",
-            verbose=1,
-        )
 
-
-def test_fetch_localizer(request_mocker, tmp_path):
+def test_fetch_localizer(tmp_path):
     dataset = func.fetch_localizer_first_level(data_dir=tmp_path)
+
     assert isinstance(dataset["events"], str)
     assert isinstance(dataset.epi_img, str)
 
 
 def _mock_original_spm_auditory_events_file():
     expected_events_data = {
-        "onset": [factor * 42.0 for factor in range(0, 16)],
+        "onset": [factor * 42.0 for factor in range(16)],
         "duration": [42.0] * 16,
         "trial_type": ["rest", "active"] * 8,
     }
@@ -861,12 +903,11 @@ def _mock_original_spm_auditory_events_file():
 def _mock_bids_compliant_spm_auditory_events_file():
     events_filepath = os.path.join(os.getcwd(), "tests_events.tsv")
     func._make_events_file_spm_auditory_data(events_filepath=events_filepath)
-    with open(events_filepath) as actual_events_file_obj:
-        actual_events_data_string = actual_events_file_obj.read()
+    actual_events_data_string = Path(events_filepath).read_text()
     return actual_events_data_string, events_filepath
 
 
-def test_fetch_language_localizer_demo_dataset(request_mocker, tmp_path):
+def test_fetch_language_localizer_demo_dataset(tmp_path):
     data_dir = tmp_path
     expected_data_dir = tmp_path / "fMRI-language-localizer-demo-dataset"
     contents_dir = Path(__file__).parent / "data" / "archive_contents"
@@ -879,11 +920,12 @@ def test_fetch_language_localizer_demo_dataset(request_mocker, tmp_path):
     actual_dir, actual_subdirs = func.fetch_language_localizer_demo_dataset(
         data_dir
     )
+
     assert actual_dir == str(expected_data_dir)
     assert actual_subdirs == sorted(expected_files)
 
 
-def test_make_spm_auditory_events_file(request_mocker):
+def test_make_spm_auditory_events_file():
     try:
         (
             actual_events_data_string,
@@ -908,9 +950,9 @@ def test_make_spm_auditory_events_file(request_mocker):
     assert actual_events_data_string == expected_events_data_string
 
 
-def test_fetch_spm_auditory(request_mocker, tmp_path):
-    saf = ["fM00223/fM00223_%03i.img" % index for index in range(4, 100)]
-    saf_ = ["fM00223/fM00223_%03i.hdr" % index for index in range(4, 100)]
+def test_fetch_spm_auditory(tmp_path):
+    saf = [f"fM00223/fM00223_{int(index):03}.img" for index in range(4, 100)]
+    saf_ = [f"fM00223/fM00223_{int(index):03}.hdr" for index in range(4, 100)]
 
     data_dir = str(tmp_path / "spm_auditory")
     os.mkdir(data_dir)
@@ -930,12 +972,13 @@ def test_fetch_spm_auditory(request_mocker, tmp_path):
         shutil.copy(path_hdr, os.path.join(subject_dir, file_))
 
     dataset = func.fetch_spm_auditory(data_dir=tmp_path)
+
     assert isinstance(dataset.anat, str)
     assert isinstance(dataset.func[0], str)
     assert len(dataset.func) == 96
 
 
-def test_fetch_spm_multimodal(request_mocker, tmp_path):
+def test_fetch_spm_multimodal(tmp_path):
     data_dir = str(tmp_path / "spm_multimodal_fmri")
     os.mkdir(data_dir)
     subject_dir = os.path.join(data_dir, "sub001")
@@ -946,21 +989,22 @@ def test_fetch_spm_multimodal(request_mocker, tmp_path):
     for session in [0, 1]:
         open(
             os.path.join(
-                subject_dir, "fMRI", "trials_ses%i.mat" % (session + 1)
+                subject_dir, "fMRI", f"trials_ses{int(session + 1)}.mat"
             ),
             "a",
         ).close()
-        dir_ = os.path.join(subject_dir, "fMRI", "Session%d" % (session + 1))
+        dir_ = os.path.join(subject_dir, "fMRI", f"Session{int(session + 1)}")
         os.mkdir(dir_)
         for i in range(390):
             open(
                 os.path.join(
-                    dir_, "fMETHODS-000%i-%i-01.img" % (session + 5, i)
+                    dir_, f"fMETHODS-000{int(session + 5)}-{int(i)}-01.img"
                 ),
                 "a",
             ).close()
 
     dataset = func.fetch_spm_multimodal_fmri(data_dir=tmp_path)
+
     assert isinstance(dataset.anat, str)
     assert isinstance(dataset.func1[0], str)
     assert len(dataset.func1) == 390
@@ -971,7 +1015,7 @@ def test_fetch_spm_multimodal(request_mocker, tmp_path):
     assert isinstance(dataset.trials_ses2, str)
 
 
-def test_fiac(request_mocker, tmp_path):
+def test_fiac(tmp_path):
     # Create dummy 'files'
     fiac_dir = str(
         tmp_path / "fiac_nilearn.glm" / "nipy-data-0.2" / "data" / "fiac"
@@ -980,14 +1024,15 @@ def test_fiac(request_mocker, tmp_path):
     os.makedirs(fiac0_dir)
     for session in [1, 2]:
         # glob func data for session session + 1
-        session_func = os.path.join(fiac0_dir, "run%i.nii.gz" % session)
+        session_func = os.path.join(fiac0_dir, f"run{int(session)}.nii.gz")
         open(session_func, "a").close()
-        sess_dmtx = os.path.join(fiac0_dir, "run%i_design.npz" % session)
+        sess_dmtx = os.path.join(fiac0_dir, f"run{int(session)}_design.npz")
         open(sess_dmtx, "a").close()
     mask = os.path.join(fiac0_dir, "mask.nii.gz")
     open(mask, "a").close()
 
     dataset = func.fetch_fiac_first_level(data_dir=tmp_path)
+
     assert isinstance(dataset.func1, str)
     assert isinstance(dataset.func2, str)
     assert isinstance(dataset.design_matrix1, str)

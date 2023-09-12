@@ -6,6 +6,8 @@ import warnings
 import nibabel
 import numpy as np
 import pytest
+from sklearn.base import BaseEstimator
+
 from nilearn._utils.extmath import fast_abs_percentile
 from nilearn._utils.param_validation import (
     MNI152_BRAIN_VOLUME,
@@ -13,7 +15,6 @@ from nilearn._utils.param_validation import (
     check_feature_screening,
     check_threshold,
 )
-from sklearn.base import BaseEstimator
 
 mni152_brain_mask = (
     "/usr/share/fsl/data/standard/MNI152_T1_1mm_brain_mask.nii.gz"
@@ -90,13 +91,12 @@ def test_feature_screening():
                     is None
                 )
             elif screening_percentile == 101 or screening_percentile == -1:
-                pytest.raises(
-                    ValueError,
-                    check_feature_screening,
-                    screening_percentile,
-                    mask_img,
-                    is_classif,
-                )
+                with pytest.raises(ValueError):
+                    check_feature_screening(
+                        screening_percentile,
+                        mask_img,
+                        is_classif,
+                    )
             elif screening_percentile == 20:
                 assert isinstance(
                     check_feature_screening(

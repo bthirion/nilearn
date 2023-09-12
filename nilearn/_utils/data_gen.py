@@ -11,11 +11,12 @@ import pandas as pd
 import scipy.linalg
 import scipy.signal
 from nibabel import Nifti1Image
+from scipy.ndimage import binary_dilation
+from sklearn.utils import check_random_state
+
 from nilearn import datasets, image, maskers, masking
 from nilearn._utils import as_ndarray, logger
 from nilearn.interfaces.bids._utils import _bids_entities, _check_bids_label
-from scipy.ndimage import binary_dilation
-from sklearn.utils import check_random_state
 
 
 def generate_mni_space_img(n_scans=1, res=30, random_state=0, mask_dilation=2):
@@ -366,9 +367,8 @@ def generate_fake_fmri(shape=(10, 11, 12),
     target = np.zeros(length, dtype=int)
     rest_max_size = (length - (n_blocks * block_size)) // n_blocks
     if rest_max_size < 0:
-        raise ValueError('%s is too small '
-                         'to put %s blocks of size %s' %
-                         (length, n_blocks, block_size))
+        raise ValueError(f'{length} is too small '
+                         f'to put {n_blocks} blocks of size {block_size}')
     t_start = 0
     if rest_max_size > 0:
         t_start = rand_gen.randint(0, rest_max_size, 1)[0]
@@ -453,7 +453,8 @@ def generate_fake_fmri_data_and_design(shapes,
 def write_fake_fmri_data_and_design(shapes,
                                     rk=3,
                                     affine=np.eye(4),
-                                    random_state=0):
+                                    random_state=0,
+                                    file_path=None):
     """Generate random :term:`fMRI` data \
     and design matrices and write them to disk.
 
@@ -462,18 +463,18 @@ def write_fake_fmri_data_and_design(shapes,
     shapes : :obj:`list` of :obj:`tuple`s of :obj:`int`
         A list of shapes in tuple format.
 
-    rk : :obj:`int`, optional
+    rk : :obj:`int`, default=3
         Number of columns in the design matrix to be generated.
-        Default=3.
 
-    affine : :obj:`numpy.ndarray`, optional
+    affine : :obj:`numpy.ndarray`, default=np.eye(4)
         Affine of returned images.
-        Default=np.eye(4).
 
     random_state : :obj:`int` or :obj:`numpy.random.RandomState` instance, \
-                   optional
+                   default=0
         Random number generator, or seed.
-        Default=0.
+
+    file_path : :obj:`str` or :obj:`pathlib.Path`, default=None
+        Output file path.
 
     Returns
     -------
@@ -491,19 +492,48 @@ def write_fake_fmri_data_and_design(shapes,
     nilearn._utils.data_gen.generate_fake_fmri_data_and_design
 
     """
-    mask_file, fmri_files, design_files = 'mask.nii', [], []
+    if file_path is None:
+        file_path = Path.cwd()
+
+    mask_file, fmri_files, design_files = file_path / 'mask.nii', [], []
+
     rand_gen = check_random_state(random_state)
     for i, shape in enumerate(shapes):
-        fmri_files.append('fmri_run%d.nii' % i)
+
         data = rand_gen.randn(*shape)
         data[1:-1, 1:-1, 1:-1] += 100
+        fmri_files.append(str(file_path / f'fmri_run{i:d}.nii'))
         Nifti1Image(data, affine).to_filename(fmri_files[-1])
-        design_files.append('dmtx_%d.csv' % i)
+
+        design_files.append(str(file_path / f'dmtx_{i:d}.csv'))
         pd.DataFrame(rand_gen.randn(shape[3], rk),
                      columns=['', '', '']).to_csv(design_files[-1])
+
     Nifti1Image((rand_gen.rand(*shape[:3]) > .5).astype(np.int8),
                 affine).to_filename(mask_file)
+
     return mask_file, fmri_files, design_files
+
+
+def write_fake_bold_gifti(file_path):
+    """Generate a gifti image and write it to disk.
+
+    Note this only generates an empty file for now.
+
+    Parameters
+    ----------
+    file_path : :obj:`str`
+        Output file path.
+
+    Returns
+    -------
+    file_path : :obj:`str`
+        Output file path.
+
+    """
+    Path(file_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(file_path).touch()
+    return file_path
 
 
 def write_fake_bold_img(file_path,
@@ -676,7 +706,7 @@ def generate_group_sparse_gaussian_graphs(n_subjects=5,
     topology = topology > 0
     assert (np.all(topology == topology.T))
     logger.log(
-        "Sparsity: {0:f}".format(1. * topology.sum() / (topology.shape[0]**2)),
+        f"Sparsity: {1.0 * topology.sum() / topology.shape[0] ** 2 :f}",
         verbose=verbose)
 
     # Generate temporal signals
@@ -734,13 +764,17 @@ def basic_confounds(length, random_state=0):
     -------
     confounds : :obj:`pandas.DataFrame`.
         Basic confounds.
-        This DataFrame will have six columns: "RotX", "RotY", "RotZ", "X", "Y",
-        and "Z".
+        This DataFrame will have 9 columns:
+        'csf', 'white_matter', 'global_signal'
+        'rot_x', 'rot_y', 'rot_z',
+        'trans_x', 'trans_y', 'trans_z'.
 
     """
     rand_gen = check_random_state(random_state)
-    columns = ['RotX', 'RotY', 'RotZ', 'X', 'Y', 'Z']
-    data = rand_gen.rand(length, 6)
+    columns = ['csf', 'white_matter', 'global_signal',
+               'rot_x', 'rot_y', 'rot_z',
+               'trans_x', 'trans_y', 'trans_z']
+    data = rand_gen.rand(length, len(columns))
     confounds = pd.DataFrame(data, columns=columns)
     return confounds
 
@@ -1097,7 +1131,8 @@ def _mock_bids_derivatives(
     n_voxels,
     rand_gen,
 ):
-    """Create a fake raw :term:`bids<BIDS>` dataset directory with dummy files.
+    """Create a fake derivatives :term:`bids<BIDS>` dataset directory \
+       with dummy files.
 
     Parameters
     ----------
@@ -1231,7 +1266,10 @@ def _create_bids_filename(
             value = fields["entities"][key]
             if value not in (None, ""):
                 filename += f"{key}-{value}_"
-    filename += f"{fields['suffix']}.{fields['extension']}"
+    if "suffix" in fields:
+        filename += f"{fields['suffix']}"
+    if "extension" in fields:
+        filename += f".{fields['extension']}"
 
     return filename
 
@@ -1355,10 +1393,12 @@ def _write_bids_derivative_func(
 ):
     """Create BIDS functional derivative and confounds files.
 
-    Files created come with two spaces and descriptions.
+    Nifti files created come with two spaces and descriptions.
     Spaces are: 'MNI' and 'T1w'.
     Descriptions are: 'preproc' and :term:`fMRIPrep`.
     Only space 'T1w' include both descriptions.
+
+    Gifti files are in "fsaverage5" space for both hemispheres.
 
     Parameters
     ----------
@@ -1398,6 +1438,11 @@ def _write_bids_derivative_func(
 
     shape = [n_voxels, n_voxels, n_voxels, n_time_points]
 
+    entities_to_include = [
+        *_bids_entities()["raw"],
+        *_bids_entities()["derivatives"]
+    ]
+
     for space in ("MNI", "T1w"):
         for desc in ("preproc", "fmriprep"):
             # Only space 'T1w' include both descriptions.
@@ -1407,11 +1452,18 @@ def _write_bids_derivative_func(
             fields["entities"]["space"] = space
             fields["entities"]["desc"] = desc
 
-            entities_to_include = [
-                *_bids_entities()["raw"], *_bids_entities()["derivatives"]
-            ]
-
             bold_path = func_path / _create_bids_filename(
                 fields=fields, entities_to_include=entities_to_include
             )
             write_fake_bold_img(bold_path, shape=shape, random_state=rand_gen)
+
+    fields["entities"]["space"] = "fsaverage5"
+    fields["extension"] = "func.gii"
+    fields["entities"].pop("desc")
+    for hemi in ["L", "R"]:
+        fields["entities"]["hemi"] = hemi
+        gifti_path = func_path / _create_bids_filename(
+            fields=fields,
+            entities_to_include=entities_to_include
+        )
+        write_fake_bold_gifti(gifti_path)

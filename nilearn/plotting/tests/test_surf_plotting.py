@@ -1,49 +1,48 @@
 # Tests for functions in surf_plotting.py
-import numpy as np
-import nibabel
-from matplotlib.figure import Figure
-import matplotlib.pyplot as plt
-import pytest
 import re
 import tempfile
-import os
 import unittest.mock as mock
 
-from nilearn.plotting.img_plotting import MNI152TEMPLATE
+import matplotlib.pyplot as plt
+import numpy as np
+import pytest
+from matplotlib.figure import Figure
+from numpy.testing import assert_array_equal
+
+from nilearn.datasets import fetch_surf_fsaverage
+from nilearn.plotting.displays import PlotlySurfaceFigure
 from nilearn.plotting.surf_plotting import (
-    plot_surf,
-    plot_surf_stat_map,
-    plot_surf_roi,
-    plot_img_on_surf,
-    plot_surf_contours,
+    VALID_HEMISPHERES,
+    VALID_VIEWS,
+    _compute_facecolors_matplotlib,
+    _get_ticks_matplotlib,
     _get_view_plot_surf_matplotlib,
     _get_view_plot_surf_plotly,
-    _get_ticks_matplotlib,
-    _compute_facecolors_matplotlib
+    plot_img_on_surf,
+    plot_surf,
+    plot_surf_contours,
+    plot_surf_roi,
+    plot_surf_stat_map,
 )
-from nilearn.datasets import fetch_surf_fsaverage
 from nilearn.surface import load_surf_data, load_surf_mesh
 from nilearn.surface.testing_utils import generate_surf
-from numpy.testing import assert_array_equal
-from nilearn.plotting.surf_plotting import VALID_HEMISPHERES, VALID_VIEWS
-from nilearn.plotting.displays import PlotlySurfaceFigure
 
 try:
-    import plotly.graph_objects as go  # noqa
+    import plotly.graph_objects as go
 except ImportError:
     PLOTLY_INSTALLED = False
 else:
     PLOTLY_INSTALLED = True
 
 try:
-    import kaleido  # noqa
+    import kaleido  # noqa:F401
 except ImportError:
     KALEIDO_INSTALLED = False
 else:
     KALEIDO_INSTALLED = True
 
 try:
-    import IPython.display  # noqa
+    import IPython.display  # noqa:F401
 except ImportError:
     IPYTHON_INSTALLED = False
 else:
@@ -198,7 +197,6 @@ EXPECTED_VIEW_MATPLOTLIB = {"left": {"anterior": (0, 90),
                                       "ventral": (270, 0)}}
 
 
-
 @pytest.mark.parametrize("full_view", EXPECTED_CAMERAS_PLOTLY)
 def test_get_view_plot_surf_plotly(full_view):
     from nilearn.plotting.surf_plotting import (
@@ -240,8 +238,8 @@ def expected_view_matplotlib(hemi, view):
 @pytest.mark.parametrize("view", VALID_VIEWS)
 def test_get_view_plot_surf_matplotlib(hemi, view, expected_view_matplotlib):
     from nilearn.plotting.surf_plotting import _get_view_plot_surf_matplotlib
-    assert(_get_view_plot_surf_matplotlib(hemi, view)
-           == expected_view_matplotlib)
+    assert (_get_view_plot_surf_matplotlib(hemi, view)
+            == expected_view_matplotlib)
 
 
 def test_surface_figure():
@@ -311,12 +309,12 @@ def test_plotly_show(renderer):
 @pytest.mark.skipif(not PLOTLY_INSTALLED or not KALEIDO_INSTALLED,
                     reason=("Plotly and/or kaleido not installed; "
                             "required for this test."))
-def test_plotly_savefig(tmpdir):
-    ps = PlotlySurfaceFigure(go.Figure(), output_file=str(tmpdir / "foo.png"))
-    assert ps.output_file == str(tmpdir / "foo.png")
+def test_plotly_savefig(tmp_path):
+    ps = PlotlySurfaceFigure(go.Figure(), output_file=tmp_path / "foo.png")
+    assert ps.output_file == tmp_path / "foo.png"
     assert ps.figure is not None
     ps.savefig()
-    assert os.path.exists(str(tmpdir / "foo.png"))
+    assert (tmp_path / "foo.png").exists()
 
 
 @pytest.mark.skipif(not PLOTLY_INSTALLED,
@@ -327,7 +325,6 @@ def test_instantiation_error_plotly_surface_figure(input_obj):
                        match=("`PlotlySurfaceFigure` accepts only "
                               "plotly figure objects.")):
         PlotlySurfaceFigure(input_obj)
-
 
 
 @pytest.mark.parametrize(
@@ -360,8 +357,10 @@ def test_check_hemisphere_is_valid(hemi, is_valid):
 
 @pytest.mark.parametrize("hemi,view", [("foo", "medial"), ("bar", "anterior")])
 def test_get_view_plot_surf_hemisphere_errors(hemi, view):
-    from nilearn.plotting.surf_plotting import (_get_view_plot_surf_matplotlib,
-                                                _get_view_plot_surf_plotly)
+    from nilearn.plotting.surf_plotting import (
+        _get_view_plot_surf_matplotlib,
+        _get_view_plot_surf_plotly,
+    )
     with pytest.raises(ValueError,
                        match="Invalid hemispheres definition"):
         _get_view_plot_surf_matplotlib(hemi, view)
@@ -456,10 +455,10 @@ def test_plot_surf_avg_method():
     mesh = generate_surf()
     rng = np.random.RandomState(42)
     # Plot with avg_method
-    ## Test all built-in methods and check
+    # Test all built-in methods and check
     mapp = rng.standard_normal(size=mesh[0].shape[0])
     mesh_ = load_surf_mesh(mesh)
-    coords, faces = mesh_[0], mesh_[1]
+    _, faces = mesh_[0], mesh_[1]
 
     for method in ['mean', 'median', 'min', 'max']:
         display = plot_surf(mesh, surf_map=mapp,
@@ -482,7 +481,8 @@ def test_plot_surf_avg_method():
             cmap(agg_faces),
             display._axstack.as_list()[0].collections[0]._facecolors
         )
-    ## Try custom avg_method
+
+    #  Try custom avg_method
     def custom_avg_function(vertices):
         return vertices[0] * vertices[1] * vertices[2]
     plot_surf(
@@ -694,8 +694,9 @@ def test_plot_surf_stat_map_matplotlib_specific():
     fig = plot_surf_stat_map(mesh, stat_map=data)
     # Check that the resulting plot facecolors contain no transparent faces
     # (last column equals zero) even though the texture contains nan values
-    assert(mesh[1].shape[0] ==
-            ((fig._axstack.as_list()[0].collections[0]._facecolors[:, 3]) != 0).sum())  # noqa
+    tmp = fig._axstack.as_list()[0].collections[0]
+    assert (mesh[1].shape[0] ==
+            ((tmp._facecolors[:, 3]) != 0).sum())
 
     # Save execution time and memory
     plt.close()
@@ -705,12 +706,6 @@ def test_plot_surf_stat_map_error():
     mesh = generate_surf()
     rng = np.random.RandomState(42)
     data = 10 * rng.standard_normal(size=mesh[0].shape[0])
-
-    # Try to input vmin
-    with pytest.raises(
-            ValueError,
-            match='this function does not accept a "vmin" argument'):
-        plot_surf_stat_map(mesh, stat_map=data, vmin=0)
 
     # Wrong size of stat map data
     with pytest.raises(
@@ -794,8 +789,11 @@ def test_plot_surf_roi_matplotlib_specific():
                         engine='matplotlib')
     # Check that the resulting plot facecolors contain no transparent faces
     # (last column equals zero) even though the texture contains nan values
-    assert(mesh[1].shape[0] ==
-           ((img._axstack.as_list()[0].collections[0]._facecolors[:, 3]) != 0).sum())
+    tmp = img._axstack.as_list()[0].collections[0]
+    assert (
+        mesh[1].shape[0] ==
+        ((tmp._facecolors[:, 3]) != 0).sum()
+    )
     # Save execution time and memory
     plt.close()
 
@@ -813,18 +811,30 @@ def test_plot_surf_roi_error(engine):
         plot_surf_roi(mesh, roi_map=roi_idx, engine=engine)
 
 
-def _generate_img():
-    mni_affine = MNI152TEMPLATE.get_affine()
-    data_positive = np.zeros((7, 7, 3))
-    rng = np.random.RandomState(42)
-    data_rng = rng.uniform(size=(7, 7, 3))
-    data_positive[1:-1, 2:-1, 1:] = data_rng[1:-1, 2:-1, 1:]
-    nii = nibabel.Nifti1Image(data_positive, mni_affine)
-    return nii
+@pytest.mark.parametrize(
+    "kwargs", [{"vmin": 2}, {"vmin": 2, "threshold": 5}, {"threshold": 5}]
+)
+def test_plot_surf_roi_colorbar_vmin_equal_across_engines(kwargs):
+    """See issue https://github.com/nilearn/nilearn/issues/3944"""
+    if not PLOTLY_INSTALLED:
+        pytest.skip("Plotly is not installed; required for this test.")
+    mesh = generate_surf()
+    roi_map = np.arange(0, len(mesh[0]))
+
+    mpl_plot = plot_surf_roi(
+        mesh, roi_map=roi_map, colorbar=True, engine="matplotlib", **kwargs
+    )
+    plotly_plot = plot_surf_roi(
+        mesh, roi_map=roi_map, colorbar=True, engine="plotly", **kwargs
+    )
+    assert (
+        int(mpl_plot.axes[-1].get_yticklabels()[0].get_text())
+        == plotly_plot.figure.data[1]["cmin"]
+    )
 
 
-def test_plot_img_on_surf_hemispheres_and_orientations():
-    nii = _generate_img()
+def test_plot_img_on_surf_hemispheres_and_orientations(img_3d_mni):
+    nii = img_3d_mni
     # Check that all combinations of 1D or 2D hemis and orientations work.
     plot_img_on_surf(nii, hemispheres=['right'], views=['lateral'])
     plot_img_on_surf(nii, hemispheres=['left', 'right'], views=['lateral'])
@@ -840,11 +850,13 @@ def test_plot_img_on_surf_hemispheres_and_orientations():
                      views=[(210.0, 90.0), (15.0, -45.0)])
 
 
-
-def test_plot_img_on_surf_colorbar():
-    nii = _generate_img()
+def test_plot_img_on_surf_colorbar(img_3d_mni):
+    nii = img_3d_mni
     plot_img_on_surf(nii, hemispheres=['right'], views=['lateral'],
-                     colorbar=True, vmax=5, threshold=3)
+                     colorbar=True, vmin=-5, vmax=5, threshold=3)
+    plot_img_on_surf(nii, hemispheres=['right'], views=['lateral'],
+                     colorbar=True, vmin=-1, vmax=5, symmetric_cbar=False,
+                     threshold=3)
     plot_img_on_surf(nii, hemispheres=['right'], views=['lateral'],
                      colorbar=False)
     plot_img_on_surf(nii, hemispheres=['right'], views=['lateral'],
@@ -853,14 +865,14 @@ def test_plot_img_on_surf_colorbar():
                      colorbar=True, cmap='roy_big_bl', vmax=2)
 
 
-def test_plot_img_on_surf_inflate():
-    nii = _generate_img()
+def test_plot_img_on_surf_inflate(img_3d_mni):
+    nii = img_3d_mni
     plot_img_on_surf(nii, hemispheres=['right'], views=['lateral'],
                      inflate=True)
 
 
-def test_plot_img_on_surf_surf_mesh():
-    nii = _generate_img()
+def test_plot_img_on_surf_surf_mesh(img_3d_mni):
+    nii = img_3d_mni
     plot_img_on_surf(nii, hemispheres=['right', 'left'], views=['lateral'])
     plot_img_on_surf(nii, hemispheres=['right', 'left'], views=['lateral'],
                      surf_mesh='fsaverage5')
@@ -869,9 +881,9 @@ def test_plot_img_on_surf_surf_mesh():
                      surf_mesh=surf_mesh)
 
 
-def test_plot_img_on_surf_with_invalid_orientation():
+def test_plot_img_on_surf_with_invalid_orientation(img_3d_mni):
     kwargs = {"hemisphere": ["right"], "inflate": True}
-    nii = _generate_img()
+    nii = img_3d_mni
     with pytest.raises(ValueError):
         plot_img_on_surf(nii, views=['latral'], **kwargs)
     with pytest.raises(ValueError):
@@ -882,8 +894,8 @@ def test_plot_img_on_surf_with_invalid_orientation():
         plot_img_on_surf(nii, views=['medial', {'a': 'a'}], **kwargs)
 
 
-def test_plot_img_on_surf_with_invalid_hemisphere():
-    nii = _generate_img()
+def test_plot_img_on_surf_with_invalid_hemisphere(img_3d_mni):
+    nii = img_3d_mni
     with pytest.raises(ValueError):
         plot_img_on_surf(
             nii, views=['lateral'], inflate=True, hemispheres=["lft]"]
@@ -901,8 +913,8 @@ def test_plot_img_on_surf_with_invalid_hemisphere():
         )
 
 
-def test_plot_img_on_surf_with_figure_kwarg():
-    nii = _generate_img()
+def test_plot_img_on_surf_with_figure_kwarg(img_3d_mni):
+    nii = img_3d_mni
     with pytest.raises(ValueError):
         plot_img_on_surf(
             nii,
@@ -912,8 +924,8 @@ def test_plot_img_on_surf_with_figure_kwarg():
         )
 
 
-def test_plot_img_on_surf_with_axes_kwarg():
-    nii = _generate_img()
+def test_plot_img_on_surf_with_axes_kwarg(img_3d_mni):
+    nii = img_3d_mni
     with pytest.raises(ValueError):
         plot_img_on_surf(
             nii,
@@ -924,22 +936,32 @@ def test_plot_img_on_surf_with_axes_kwarg():
         )
 
 
-def test_plot_img_on_surf_title():
-    nii = _generate_img()
+def test_plot_img_on_surf_with_engine_kwarg(img_3d_mni):
+    with pytest.raises(ValueError):
+        plot_img_on_surf(
+            img_3d_mni,
+            views=["anterior"],
+            hemispheres=["right"],
+            inflat=True,
+            engine="something",
+        )
+
+
+def test_plot_img_on_surf_title(img_3d_mni):
     title = "Title"
-    fig, axes = plot_img_on_surf(
-        nii, hemispheres=['right'], views=['lateral']
+    fig, _ = plot_img_on_surf(
+        img_3d_mni, hemispheres=['right'], views=['lateral']
     )
     assert fig._suptitle is None, "Created title without title kwarg."
-    fig, axes = plot_img_on_surf(
-        nii, hemispheres=['right'], views=['lateral'], title=title
+    fig, _ = plot_img_on_surf(
+        img_3d_mni, hemispheres=['right'], views=['lateral'], title=title
     )
     assert fig._suptitle is not None, "Title not created."
     assert fig._suptitle.get_text() == title, "Title text not assigned."
 
 
-def test_plot_img_on_surf_output_file(tmp_path):
-    nii = _generate_img()
+def test_plot_img_on_surf_output_file(tmp_path, img_3d_mni):
+    nii = img_3d_mni
     fname = tmp_path / 'tmp.png'
     return_value = plot_img_on_surf(nii,
                                     hemispheres=['right'],
@@ -962,7 +984,8 @@ def test_plot_surf_contours():
                        colors=['r', 'g'])
     plot_surf_contours(mesh, parcellation, levels=[1, 2], colors=['r', 'g'],
                        labels=['1', '2'])
-    fig = plot_surf_contours(mesh, parcellation, levels=[1, 2], colors=['r', 'g'],
+    fig = plot_surf_contours(mesh, parcellation, levels=[1, 2],
+                             colors=['r', 'g'],
                              labels=['1', '2'], legend=True)
     assert fig.legends is not None
     plot_surf_contours(mesh, parcellation, levels=[1, 2],
@@ -1008,14 +1031,25 @@ def test_plot_surf_contours_error():
             ValueError,
             match='Axes must be 3D.'):
         plot_surf_contours(mesh, parcellation, axes=axes)
+    msg = 'All elements of colors .* matplotlib .* RGBA'
     with pytest.raises(
             ValueError,
-            match='All elements of colors need to be either a matplotlib color string or RGBA values.'):
-        plot_surf_contours(mesh, parcellation, levels=[1, 2], colors=[[1, 2], 3])
+            match=msg):
+        plot_surf_contours(
+            mesh,
+            parcellation,
+            levels=[1, 2],
+            colors=[[1, 2], 3])
+    msg = 'Levels, labels, and colors argument .* same length or None.'
     with pytest.raises(
             ValueError,
-            match='Levels, labels, and colors argument need to be either the same length or None.'):
-        plot_surf_contours(mesh, parcellation, levels=[1, 2], colors=['r'], labels=['1', '2'])
+            match=msg):
+        plot_surf_contours(
+            mesh,
+            parcellation,
+            levels=[1, 2],
+            colors=['r'],
+            labels=['1', '2'])
 
 
 @pytest.mark.parametrize("vmin,vmax,cbar_tick_format,expected", [
@@ -1087,3 +1121,34 @@ def test_compute_facecolors_matplotlib():
     assert not np.allclose(
         facecolors_manually_rescaled, facecolors_auto_normalized
     )
+
+    with pytest.warns(
+        DeprecationWarning,
+        match=(
+            "The `darkness` parameter will be deprecated in release 0.13. "
+            "We recommend setting `darkness` to None"
+        ),
+    ):
+        facecolors_manually_rescaled = _compute_facecolors_matplotlib(
+            bg_map_scaled,
+            mesh[1],
+            len(mesh[0]),
+            0.5,
+            alpha,
+        )
+
+
+@pytest.mark.parametrize("avg_method", ["mean", "median"])
+@pytest.mark.parametrize("symmetric_cmap", [True, False, None])
+@pytest.mark.parametrize("engine", ["matplotlib", "plotly"])
+def test_plot_surf_roi_default_arguments(engine, symmetric_cmap, avg_method):
+    """Regression test for https://github.com/nilearn/nilearn/issues/3941"""
+    if not PLOTLY_INSTALLED:
+        pytest.skip('Plotly is not installed; required for this test.')
+    mesh, roi_map, _ = _generate_data_test_surf_roi()
+    plot_surf_roi(mesh, roi_map=roi_map,
+                  engine=engine,
+                  symmetric_cmap=symmetric_cmap,
+                  darkness=None,  # to avoid deprecation warning
+                  cmap="RdYlBu_r",
+                  avg_method=avg_method)

@@ -1,6 +1,5 @@
 """Utilities for testing nilearn."""
 # Author: Alexandre Abraham, Philippe Gervais
-# License: simplified BSD
 import contextlib
 import functools
 import gc
@@ -11,8 +10,6 @@ import warnings
 from pathlib import Path
 
 import pytest
-import sklearn
-from nilearn._utils import _compare_version
 
 # we use memory_profiler library for memory consumption checks
 try:
@@ -56,15 +53,8 @@ def check_deprecation(func, match=None):
 
     @functools.wraps(func)
     def wrapped(*args, **kwargs):
-        # --- CAN BE REMOVED --- #
-        if _compare_version(sklearn.__version__, "<", "0.22"):
-            with pytest.deprecated_call():
-                result = func(*args, **kwargs)
-        # --- CAN BE REMOVED --- #
-
-        else:
-            with pytest.warns(FutureWarning, match=match):
-                result = func(*args, **kwargs)
+        with pytest.warns(FutureWarning, match=match):
+            result = func(*args, **kwargs)
         return result
 
     return wrapped
@@ -92,10 +82,9 @@ def assert_memory_less_than(
 
     if mem_used > memory_limit * (1 + tolerance):
         raise ValueError(
-            "Memory consumption measured ({:.2f} MiB) is "
-            "greater than required memory limit ({} MiB) within "
-            "accepted tolerance ({:.2f}%)."
-            "".format(mem_used, memory_limit, tolerance * 100)
+            f"Memory consumption measured ({mem_used:.2f} MiB) is "
+            f"greater than required memory limit ({memory_limit} MiB) within "
+            f"accepted tolerance ({tolerance * 100:.2f}%)."
         )
 
     # We are confident in memory_profiler measures above 100MiB.
@@ -104,11 +93,9 @@ def assert_memory_less_than(
     if mem_used < 50:
         raise ValueError(
             "Memory profiler measured an untrustable memory "
-            "consumption ({:.2f} MiB). The expected memory "
-            "limit was {:.2f} MiB. Try to bench with larger "
-            "objects (at least 100MiB in memory).".format(
-                mem_used, memory_limit
-            )
+            f"consumption ({mem_used:.2f} MiB). The expected memory "
+            f"limit was {memory_limit:.2f} MiB. Try to bench with larger "
+            "objects (at least 100MiB in memory)."
         )
 
 
@@ -186,7 +173,7 @@ def write_tmp_imgs(*imgs, **kwargs):
                     del img
 
                 if use_wildcards:
-                    yield prefix + "*" + suffix
+                    yield f"{prefix}*{suffix}"
                 else:
                     if len(imgs) == 1:
                         yield filenames[0]

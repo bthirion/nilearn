@@ -61,7 +61,10 @@ from nilearn.maskers import MultiNiftiLabelsMasker
 
 # ConenctivityMeasure from Nilearn uses simple 'correlation' to compute
 # connectivity matrices for all subjects in a list
-connectome_measure = ConnectivityMeasure(kind="correlation")
+connectome_measure = ConnectivityMeasure(
+    kind="correlation",
+    standardize="zscore_sample",
+)
 
 # useful for plotting connectivity interactions on glass brain
 from nilearn import plotting
@@ -72,6 +75,7 @@ from nilearn import plotting
 masker = MultiNiftiLabelsMasker(
     labels_img=yeo["thick_17"],
     standardize="zscore_sample",
+    standardize_confounds="zscore_sample",
     memory="nilearn_cache",
     n_jobs=2,
 )
@@ -156,6 +160,7 @@ from nilearn.maskers import MultiNiftiMapsMasker
 masker = MultiNiftiMapsMasker(
     maps_img=difumo.maps,
     standardize="zscore_sample",
+    standardize_confounds="zscore_sample",
     memory="nilearn_cache",
     n_jobs=2,
 )

@@ -1,17 +1,17 @@
 """Canonical Independent Component Analysis."""
 
 # Author: Alexandre Abraham, Gael Varoquaux,
-# License: BSD 3 clause
 
 import warnings as _warnings
 from operator import itemgetter
 
 import numpy as np
 from joblib import Memory, Parallel, delayed
-from nilearn._utils import fill_doc
 from scipy.stats import scoreatpercentile
 from sklearn.decomposition import fastica
 from sklearn.utils import check_random_state
+
+from nilearn._utils import fill_doc
 
 from ._multi_pca import _MultiPCA
 

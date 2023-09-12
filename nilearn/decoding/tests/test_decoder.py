@@ -14,7 +14,6 @@ Order of tests from top to bottom:
 #         Binh Nguyen
 #         Thomas Bazeiile
 #
-# License: simplified BSD
 
 import collections
 import numbers
@@ -22,6 +21,30 @@ import warnings
 
 import numpy as np
 import pytest
+import sklearn
+from numpy.testing import assert_array_almost_equal
+from sklearn.datasets import load_iris, make_classification, make_regression
+from sklearn.dummy import DummyClassifier, DummyRegressor
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.exceptions import NotFittedError
+from sklearn.linear_model import (
+    LassoCV,
+    LogisticRegressionCV,
+    RidgeClassifierCV,
+    RidgeCV,
+)
+from sklearn.metrics import (
+    accuracy_score,
+    check_scoring,
+    get_scorer,
+    r2_score,
+    roc_auc_score,
+)
+from sklearn.model_selection import KFold, LeaveOneGroupOut, ParameterGrid
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVR, LinearSVC
+
+from nilearn._utils import _compare_version
 from nilearn._utils.param_validation import check_feature_screening
 from nilearn.decoding.decoder import (
     Decoder,
@@ -36,22 +59,6 @@ from nilearn.decoding.decoder import (
 )
 from nilearn.decoding.tests.test_same_api import to_niimgs
 from nilearn.maskers import NiftiMasker
-from numpy.testing import assert_array_almost_equal
-from sklearn.datasets import load_iris, make_classification, make_regression
-from sklearn.dummy import DummyClassifier, DummyRegressor
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.exceptions import NotFittedError
-from sklearn.linear_model import LogisticRegression, RidgeClassifierCV, RidgeCV
-from sklearn.metrics import (
-    accuracy_score,
-    check_scoring,
-    get_scorer,
-    r2_score,
-    roc_auc_score,
-)
-from sklearn.model_selection import KFold, LeaveOneGroupOut, ParameterGrid
-from sklearn.preprocessing import StandardScaler
-from sklearn.svm import SVR, LinearSVC
 
 N_SAMPLES = 100
 
@@ -134,7 +141,12 @@ def multiclass_data():
 
 
 @pytest.mark.parametrize(
-    "regressor, param", [(RidgeCV(), ["alphas"]), (SVR(kernel="linear"), "C")]
+    "regressor, param",
+    [
+        (RidgeCV(), ["alphas"]),
+        (SVR(kernel="linear"), ["C"]),
+        (LassoCV(), ["n_alphas"]),
+    ],
 )
 def test_check_param_grid_regression(regressor, param):
     """Test several estimators.
@@ -153,8 +165,8 @@ def test_check_param_grid_regression(regressor, param):
 @pytest.mark.parametrize(
     "classifier, param",
     [
-        (LogisticRegression(penalty="l1"), "C"),
-        (LogisticRegression(penalty="l2"), "C"),
+        (LogisticRegressionCV(penalty="l1"), ["Cs"]),
+        (LogisticRegressionCV(penalty="l2"), ["Cs"]),
         (RidgeClassifierCV(), ["alphas"]),
     ],
 )
@@ -168,6 +180,30 @@ def test_check_param_grid_classification(rand_X_Y, classifier, param):
     param_grid = _check_param_grid(classifier, X, Y, None)
 
     assert list(param_grid.keys()) == list(param)
+
+
+@pytest.mark.parametrize(
+    "param_grid_input",
+    [
+        {"C": [1, 10, 100]},
+        {"Cs": [1, 10, 100]},
+        [{"C": [1, 10, 100]}, {"fit_intercept": [False]}],
+    ],
+)
+def test_check_param_grid_replacement(rand_X_Y, param_grid_input):
+    X, Y = rand_X_Y
+    param_to_replace = "C"
+    param_replaced = "Cs"
+    param_grid_output = _check_param_grid(
+        LogisticRegressionCV(),
+        X,
+        Y,
+        param_grid_input,
+    )
+    for params in ParameterGrid(param_grid_output):
+        assert param_to_replace not in params
+        if param_replaced not in params:
+            assert params in ParameterGrid(param_grid_input)
 
 
 @pytest.mark.parametrize("estimator", ["log_l1", RandomForestClassifier()])
@@ -383,6 +419,8 @@ def test_parallel_fit(rand_X_Y):
     [
         (RidgeCV(), "alphas", "best_alpha", False),
         (RidgeClassifierCV(), "alphas", "best_alpha", True),
+        (LogisticRegressionCV(), "Cs", "best_C", True),
+        (LassoCV(), "alphas", "best_alpha", False),
     ],
 )
 def test_parallel_fit_builtin_cv(
@@ -438,7 +476,32 @@ def test_parallel_fit_builtin_cv(
         clustering_percentile=100,
     )
 
-    assert isinstance(best_param[fitted_param_name], (float, int))
+    assert isinstance(best_param[fitted_param_name], numbers.Number)
+
+
+def test_decoder_param_grid_sequence(binary_classification_data):
+    X, y, _ = binary_classification_data
+    n_cv_folds = 10
+    param_grid = [
+        {
+            "penalty": ["l2"],
+            "C": [100, 1000],
+            "random_state": [42],  # fix the seed for consistent behaviour
+        },
+        {
+            "penalty": ["l1"],
+            "dual": [False],  # "dual" is not in the first dict
+            "C": [100, 10],
+            "random_state": [42],  # fix the seed for consistent behaviour
+        },
+    ]
+
+    model = Decoder(param_grid=param_grid, cv=n_cv_folds)
+    model.fit(X, y)
+
+    for best_params in model.cv_params_.values():
+        for param_list in best_params.values():
+            assert len(param_list) == n_cv_folds
 
 
 def test_decoder_binary_classification_with_masker_object(
@@ -509,7 +572,9 @@ def test_decoder_binary_classification_cross_validation(
     # check cross-validation scheme and fit attribute with groups enabled
     rand_local = np.random.RandomState(42)
 
-    model = Decoder(estimator="svc", mask=mask, standardize=True, cv=cv)
+    model = Decoder(
+        estimator="svc", mask=mask, standardize="zscore_sample", cv=cv
+    )
     groups = None
     if isinstance(cv, LeaveOneGroupOut):
         groups = rand_local.binomial(2, 0.3, size=len(y))
@@ -626,8 +691,18 @@ def test_decoder_error_unknown_scoring_metrics(
 
     model = Decoder(estimator=dummy_classifier, mask=mask, scoring="foo")
 
-    with pytest.raises(ValueError, match="'foo' is not a valid scoring value"):
-        model.fit(X, y)
+    if _compare_version(sklearn.__version__, ">", "1.2.2"):
+        with pytest.raises(
+            ValueError,
+            match="The 'scoring' parameter of check_scoring "
+            "must be a str among",
+        ):
+            model.fit(X, y)
+    else:
+        with pytest.raises(
+            ValueError, match="'foo' is not a valid scoring value"
+        ):
+            model.fit(X, y)
 
 
 def test_decoder_dummy_classifier_default_scoring():
@@ -821,7 +896,9 @@ def test_decoder_multiclass_classification_cross_validation(
     # check cross-validation scheme and fit attribute with groups enabled
     rand_local = np.random.RandomState(42)
 
-    model = Decoder(estimator="svc", mask=mask, standardize=True, cv=cv)
+    model = Decoder(
+        estimator="svc", mask=mask, standardize="zscore_sample", cv=cv
+    )
     groups = None
     if isinstance(cv, LeaveOneGroupOut):
         groups = rand_local.binomial(2, 0.3, size=len(y))
@@ -897,7 +974,7 @@ def test_decoder_multiclass_error_incorrect_cv(multiclass_data):
     """Check whether ValueError is raised when cv is not set correctly."""
     X, y, _ = multiclass_data
 
-    for cv in ["abc", LinearSVC()]:
+    for cv in ["abc", LinearSVC(dual=True)]:
         model = Decoder(mask=NiftiMasker(), cv=cv)
         with pytest.raises(ValueError, match="Expected cv as an integer"):
             model.fit(X, y)
